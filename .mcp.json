@@ -1,0 +1,19 @@
+{
+  "servers": {
+    "github": {
+      "command": "docker",
+      "args": ["run", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN=${MCP_GITHUB_TOKEN}", "-p", "3000:3000", "--rm", "ghcr.io/anthropics/mcp-server-github"],
+      "env": {}
+    },
+    "postgres": {
+      "command": "docker",
+      "args": ["run", "-e", "DATABASE_URL=${DATABASE_URL}", "-p", "3001:3001", "--rm", "ghcr.io/anthropics/mcp-server-postgres"],
+      "env": {}
+    },
+    "docker": {
+      "command": "docker",
+      "args": ["run", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-p", "3002:3002", "--rm", "ghcr.io/anthropics/mcp-server-docker"],
+      "env": {}
+    }
+  }
+}

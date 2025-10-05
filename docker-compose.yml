@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  mattermost-db:
+    image: postgres:13-alpine
+    container_name: mattermost-db
+    environment:
+      - POSTGRES_USER=mmuser
+      - POSTGRES_PASSWORD=mmuser_password
+      - POSTGRES_DB=mattermost
+    ports:
+      - "5432:5432"
+    volumes:
+      - mattermost-db-data:/var/lib/postgresql/data
+    networks:
+      - mattermost-network
+
+  mcp-postgres:
+    image: postgres:13-alpine
+    container_name: mcp-postgres
+    environment:
+      - POSTGRES_USER=mcpuser
+      - POSTGRES_PASSWORD=mcppass
+      - POSTGRES_DB=mcpdb
+    ports:
+      - "5433:5432"
+    volumes:
+      - mcp-db-data:/var/lib/postgresql/data
+    networks:
+      - mattermost-network
+
+  mcp-github:
+    build:
+      context: ./mcp-servers/github
+      dockerfile: Dockerfile
+    container_name: mcp-github
+    environment:
+      - GITHUB_PERSONAL_ACCESS_TOKEN=${MCP_GITHUB_TOKEN}
+    ports:
+      - "3000:3000"
+    networks:
+      - mattermost-network
+    depends_on:
+      - mcp-postgres
+
+  mcp-postgres-server:
+    build:
+      context: ./mcp-servers/postgres
+      dockerfile: Dockerfile
+    container_name: mcp-postgres-server
+    environment:
+      - DATABASE_URL=postgresql://mcpuser:mcppass@mcp-postgres:5432/mcpdb
+    ports:
+      - "3001:3001"
+    networks:
+      - mattermost-network
+    depends_on:
+      - mcp-postgres
+
+  mcp-docker:
+    build:
+      context: ./mcp-servers/docker
+      dockerfile: Dockerfile
+    container_name: mcp-docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "3002:3002"
+    networks:
+      - mattermost-network
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:latest
+    container_name: mattermost
+    environment:
+      - MM_USERNAME=mmuser
+      - MM_PASSWORD=mmuser_password
+      - MM_DBNAME=mattermost
+      - MM_SQLSETTINGS_DRIVERNAME=postgres
+      - MM_SQLSETTINGS_DATASOURCE=postgres://mmuser:mmuser_password@mattermost-db:5432/mattermost?sslmode=disable
+    ports:
+      - "8065:8065"
+    volumes:
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+      - mattermost-config:/mattermost/config
+      - mattermost-plugins:/mattermost/plugins
+      - mattermost-client-plugins:/mattermost/client/plugins
+    networks:
+      - mattermost-network
+    depends_on:
+      - mattermost-db
+
+networks:
+  mattermost-network:
+    driver: bridge
+
+volumes:
+  mattermost-db-data:
+  mcp-db-data:
+  mattermost-data:
+  mattermost-logs:
+  mattermost-config:
+  mattermost-plugins:
+  mattermost-client-plugins:
