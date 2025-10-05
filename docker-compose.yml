@@ -78,6 +78,13 @@ services:
       - MM_DBNAME=mattermost
       - MM_SQLSETTINGS_DRIVERNAME=postgres
       - MM_SQLSETTINGS_DATASOURCE=postgres://mmuser:mmuser_password@mattermost-db:5432/mattermost?sslmode=disable
+      - MM_SERVICESETTINGS_SITEURL=http://localhost:8065
+      - MM_SERVICESETTINGS_ENABLEDEVELOPER=true
+      - MM_SERVICESETTINGS_ENABLETESTING=true
+      - MM_LOGSETTINGS_ENABLECONSOLE=true
+      - MM_LOGSETTINGS_CONSOLELEVEL=DEBUG
+      - MM_PLUGINSETTINGS_ENABLED=true
+      - MM_PLUGINSETTINGS_ENABLEUPLOADS=true
     ports:
       - "8065:8065"
     volumes:
@@ -86,6 +93,7 @@ services:
       - mattermost-config:/mattermost/config
       - mattermost-plugins:/mattermost/plugins
       - mattermost-client-plugins:/mattermost/client/plugins
+      - ./mcp-servers:/mcp-servers:ro  # Монтируем наш код для просмотра изменений
     networks:
       - mattermost-network
     depends_on:

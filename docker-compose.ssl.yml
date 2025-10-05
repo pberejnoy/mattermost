@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - mattermost-network
+    depends_on:
+      - mattermost
+
+  mattermost-db:
+    image: postgres:13-alpine
+    container_name: mattermost-db
+    environment:
+      - POSTGRES_USER=mmuser
+      - POSTGRES_PASSWORD=mmuser_password
+      - POSTGRES_DB=mattermost
+    ports:
+      - "5432:5432"
+    volumes:
+      - mattermost-db-data:/var/lib/postgresql/data
+    networks:
+      - mattermost-network
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:latest
+    container_name: mattermost
+    environment:
+      - MM_SERVICESETTINGS_SITEURL=https://swiftmessenger.org
+      - MM_SQLSETTINGS_DRIVERNAME=postgres
+      - MM_SQLSETTINGS_DATASOURCE=postgres://mmuser:mmuser_password@mattermost-db:5432/mattermost?sslmode=disable
+    volumes:
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+      - mattermost-config:/mattermost/config
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - mattermost-network
+    depends_on:
+      - mattermost-db
+
+networks:
+  mattermost-network:
+    driver: bridge
+
+volumes:
+  mattermost-db-data:
+  mattermost-data:
+  mattermost-logs:
+  mattermost-config:

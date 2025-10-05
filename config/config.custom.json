@@ -1,0 +1,25 @@
+{
+    "ServiceSettings": {
+        "SiteURL": "https://swiftmessenger.org",
+        "ListenAddress": ":8065"
+    },
+    "TeamSettings": {
+        "SiteName": "Your Company Name",
+        "MaxUsersPerTeam": 50,
+        "EnableCustomBrand": true,
+        "CustomBrandText": "Welcome to Your Company Messenger",
+        "CustomDescriptionText": "Secure messaging for your team"
+    },
+    "NativeAppSettings": {
+        "AppDownloadLink": "https://https://swiftmessenger.org//apps",
+        "AndroidAppDownloadLink": "https://https://swiftmessenger.org//android",
+        "IosAppDownloadLink": "https://https://swiftmessenger.org//ios"
+    },
+    "LogSettings": {
+        "EnableConsole": true,
+        "ConsoleLevel": "INFO",
+        "EnableFile": true,
+        "FileLevel": "INFO",
+        "FileLocation": ""
+    }
+}
