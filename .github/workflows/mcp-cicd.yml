@@ -21,10 +21,18 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            mcp-servers/cicd/package-lock.json
+            mcp-servers/github/package-lock.json
           
       - name: Install CICD dependencies
         working-directory: ./mcp-servers/cicd
-        run: npm ci
+        run: |
+          npm ci
+          echo "::group::Verify package.json"
+          cat package.json
+          echo "::endgroup::"
         
       - name: Run CICD tests
         working-directory: ./mcp-servers/cicd
