@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: mcp-cicd
     environment:
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_TOKEN=${MCP_PAT}
       - MATTERMOST_WEBHOOK_URL=http://mattermost:8065/hooks/your-webhook-id
     ports:
       - "3004:3004"
