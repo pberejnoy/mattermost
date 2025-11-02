@@ -111,47 +111,41 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh/
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+          
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Pull Docker images
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           echo "::group::Pull latest images"
-          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST "\
-            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} && \
-            docker pull ghcr.io/${{ github.repository }}/mcp-cicd:${{ github.sha }}"
+          docker pull ghcr.io/${{ github.repository }}/mcp-cicd:${{ github.sha }}
+          docker pull ghcr.io/${{ github.repository }}/mcp-cicd:latest
           echo "::endgroup::"
           
       - name: Deploy services
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           MCP_WEBHOOK_URL: ${{ secrets.MCP_WEBHOOK_URL }}
         run: |
           echo "::group::Deploy services"
-          scp -i ~/.ssh/deploy_key ./mcp-servers/cicd/.env.example $DEPLOY_USER@$DEPLOY_HOST:~/mcp-servers/cicd/.env
-          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST "\
-            cd ~/mcp-servers && \
-            docker compose pull && \
-            docker compose up -d --force-recreate mcp-cicd mcp-github"
+          mkdir -p ./mcp-servers/cicd/
+          cp .env.example ./mcp-servers/cicd/.env
+          
+          # Обновляем docker-compose.yml для локального использования
+          docker compose pull
+          docker compose up -d --force-recreate mcp-cicd mcp-github
           echo "::endgroup::"
           
       - name: Verify deployment
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           echo "::group::Verify services"
-          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST "\
-            docker ps | grep mcp && \
-            curl -f http://localhost:3004/health || exit 1"
+          docker ps | grep mcp
+          curl -f http://localhost:3004/health || exit 1
           echo "::endgroup::"
           
       - name: Notify Mattermost - Success
