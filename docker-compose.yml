@@ -1,8 +1,25 @@
 version: '3.8'
 
 services:
+  mcp-cicd:
+    build:
+      context: ./mcp-servers/cicd
+      dockerfile: Dockerfile
+    container_name: mcp-cicd
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - MATTERMOST_WEBHOOK_URL=http://mattermost:8065/hooks/your-webhook-id
+    ports:
+      - "3004:3004"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - mattermost-network
+    depends_on:
+      - mattermost
+
   mattermost-db:
-    image: postgres:13-alpine
+    image: postgres:14-alpine
     container_name: mattermost-db
     environment:
       - POSTGRES_USER=mmuser
