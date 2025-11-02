@@ -5,10 +5,12 @@ on:
     branches: [ master ]
     paths:
       - 'mcp-servers/**'
+      - '.github/workflows/mcp-cicd.yml'
   pull_request:
     branches: [ master ]
     paths:
       - 'mcp-servers/**'
+      - '.github/workflows/mcp-cicd.yml'
   workflow_dispatch:
 
 jobs:
@@ -25,23 +27,51 @@ jobs:
           cache-dependency-path: |
             mcp-servers/cicd/package-lock.json
             mcp-servers/github/package-lock.json
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+          
+      - name: Debug environment
+        run: |
+          echo "::group::Directory structure"
+          ls -R mcp-servers/
+          echo "::endgroup::"
           
       - name: Install CICD dependencies
         working-directory: ./mcp-servers/cicd
         run: |
+          echo "::group::Installing dependencies"
           npm ci
-          echo "::group::Verify package.json"
+          echo "::endgroup::"
+          
+          echo "::group::Package.json content"
           cat package.json
+          echo "::endgroup::"
+          
+          echo "::group::Installed packages"
+          npm list
           echo "::endgroup::"
         
       - name: Run CICD tests
         working-directory: ./mcp-servers/cicd
         run: |
+          echo "::group::Running tests"
           if [ -f "package.json" ] && grep -q "\"test\":" "package.json"; then
             npm test
           else
             echo "No tests configured, skipping..."
           fi
+          echo "::endgroup::"
+        
+      - name: Build CICD Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mcp-servers/cicd
+          file: ./mcp-servers/cicd/Dockerfile
+          push: false
+          tags: mcp-cicd:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
         
       - name: Build CICD Docker image
         run: docker build -t mcp-cicd -f mcp-servers/cicd/Dockerfile ./mcp-servers/cicd
@@ -77,22 +107,63 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
+    environment: production
     steps:
-      - name: Deploy to server
+      - uses: actions/checkout@v3
+      
+      - name: Configure SSH
         run: |
-          echo "Deploying to production server..."
-          # Add your deployment commands here
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          
+      - name: Pull Docker images
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          echo "::group::Pull latest images"
+          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST "\
+            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} && \
+            docker pull ghcr.io/${{ github.repository }}/mcp-cicd:${{ github.sha }}"
+          echo "::endgroup::"
+          
+      - name: Deploy services
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          MCP_WEBHOOK_URL: ${{ secrets.MCP_WEBHOOK_URL }}
+        run: |
+          echo "::group::Deploy services"
+          scp -i ~/.ssh/deploy_key ./mcp-servers/cicd/.env.example $DEPLOY_USER@$DEPLOY_HOST:~/mcp-servers/cicd/.env
+          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST "\
+            cd ~/mcp-servers && \
+            docker compose pull && \
+            docker compose up -d --force-recreate mcp-cicd mcp-github"
+          echo "::endgroup::"
+          
+      - name: Verify deployment
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          echo "::group::Verify services"
+          ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST "\
+            docker ps | grep mcp && \
+            curl -f http://localhost:3004/health || exit 1"
+          echo "::endgroup::"
           
       - name: Notify Mattermost - Success
         if: success()
         run: |
           curl -X POST -H "Content-Type: application/json" \
-          --data "{\"text\":\":white_check_mark: MCP CI/CD: Deployment completed successfully! Build: ${{ github.sha }}\"}" \
+          --data "{\"text\":\":white_check_mark: MCP CI/CD: Deployment completed successfully!\n- Build: \`${{ github.sha }}\`\n- Environment: \`production\`\n- Services: \`mcp-cicd\`, \`mcp-github\`\"}" \
           ${{ secrets.MCP_WEBHOOK_URL }}
 
       - name: Notify Mattermost - Failure
         if: failure()
         run: |
           curl -X POST -H "Content-Type: application/json" \
-          --data "{\"text\":\":x: MCP CI/CD: Deployment failed! Build: ${{ github.sha }}\"}" \
+          --data "{\"text\":\":x: MCP CI/CD: Deployment failed!\n- Build: \`${{ github.sha }}\`\n- Environment: \`production\`\n- Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
           ${{ secrets.MCP_WEBHOOK_URL }}
