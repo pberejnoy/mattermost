@@ -3,8 +3,12 @@ name: MCP CI/CD
 on:
   push:
     branches: [ master ]
+    paths:
+      - 'mcp-servers/**'
   pull_request:
     branches: [ master ]
+    paths:
+      - 'mcp-servers/**'
   workflow_dispatch:
 
 jobs:
@@ -18,26 +22,69 @@ jobs:
         with:
           node-version: '18'
           
-      - name: Install dependencies
+      - name: Install CICD dependencies
+        working-directory: ./mcp-servers/cicd
         run: npm ci
         
-      - name: Run tests
-        run: npm test
+      - name: Run CICD tests
+        working-directory: ./mcp-servers/cicd
+        run: |
+          if [ -f "package.json" ] && grep -q "\"test\":" "package.json"; then
+            npm test
+          else
+            echo "No tests configured, skipping..."
+          fi
         
-      - name: Build Docker image
-        run: docker build -t mcp-cicd .
+      - name: Build CICD Docker image
+        run: docker build -t mcp-cicd -f mcp-servers/cicd/Dockerfile ./mcp-servers/cicd
+
+      - name: Install GitHub MCP Server dependencies
+        working-directory: ./mcp-servers/github
+        run: npm ci
+        
+      - name: Run GitHub MCP Server tests
+        working-directory: ./mcp-servers/github
+        run: |
+          if [ -f "package.json" ] && grep -q "\"test\":" "package.json"; then
+            npm test
+          else
+            echo "No tests configured, skipping..."
+          fi
+        
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Push Docker images
+        run: |
+          docker tag mcp-cicd ghcr.io/${{ github.repository }}/mcp-cicd:${{ github.sha }}
+          docker tag mcp-cicd ghcr.io/${{ github.repository }}/mcp-cicd:latest
+          docker push ghcr.io/${{ github.repository }}/mcp-cicd:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}/mcp-cicd:latest
         
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     steps:
       - name: Deploy to server
         run: |
           echo "Deploying to production server..."
-          # Здесь будут команды для деплоя
+          # Add your deployment commands here
           
-      - name: Notify Mattermost
+      - name: Notify Mattermost - Success
+        if: success()
         run: |
           curl -X POST -H "Content-Type: application/json" \
-          --data "{\"text\":\"Deployment completed successfully!\"}" \
+          --data "{\"text\":\":white_check_mark: MCP CI/CD: Deployment completed successfully! Build: ${{ github.sha }}\"}" \
+          ${{ secrets.MCP_WEBHOOK_URL }}
+
+      - name: Notify Mattermost - Failure
+        if: failure()
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+          --data "{\"text\":\":x: MCP CI/CD: Deployment failed! Build: ${{ github.sha }}\"}" \
           ${{ secrets.MCP_WEBHOOK_URL }}

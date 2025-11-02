@@ -1,0 +1,16 @@
+{
+  "github": {
+    "token": "YOUR_GITHUB_TOKEN",
+    "owner": "pberejnoy",
+    "repo": "mattermost"
+  },
+  "mcp": {
+    "server": {
+      "port": 3000,
+      "host": "0.0.0.0"
+    },
+    "webhooks": {
+      "endpoint": "http://localhost:8065/hooks/mtbqditjmffixgyxstkkdfim5o"
+    }
+  }
+}
